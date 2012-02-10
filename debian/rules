@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+#
+# CDBS file to build the libaugeas-ruby package.
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+pkgdir = $(CURDIR)/debian/$(cdbs_curpkg)
+
+clean::
+	$(RM) -r build
+
+# For 1.9 support in future:
+# • Put everything that follows inside ‘define build_template’...‘endef’
+# • Substitute $ with $$
+# • Substitute 1.8 with $(1)
+# • Add $(foreach ver,1.8 1.9,$(eval $(call build_template,$(ver))))
+
+define build_template
+target$(1)  := $$(shell ruby$(1) -r rbconfig -e 'print Config::CONFIG["target"]')
+libdir$(1)  := $$(shell ruby$(1) -r rbconfig -e 'print Config::CONFIG["rubylibdir"]')
+archdir$(1) := $$(shell ruby$(1) -r rbconfig -e 'print Config::CONFIG["archdir"]')
+
+builddir$(1) := $$(CURDIR)/build/ruby$(1)-$$(target$(1))
+
+build/libaugeas-ruby$(1)::
+	install -d $$(builddir$(1))
+	cd $$(builddir$(1)) && \
+	  ruby$(1) $$(CURDIR)/ext/augeas/extconf.rb && \
+	  make
+	# Run unit tests
+	-ruby$(1) -I $$(builddir$(1)) tests/tc_augeas.rb
+
+install/libaugeas-ruby$(1)::
+	cd $$(builddir$(1)) && \
+	  make install \
+	    DESTDIR=$$(pkgdir) \
+	    sitelibdir=$$(pkgdir)$$(libdir$(1)) \
+	    sitearchdir=$$(pkgdir)$$(archdir$(1))
+	install -D -m0644 $$(CURDIR)/lib/augeas.rb \
+	  $$(pkgdir)$$(libdir$(1))/augeas.rb
+endef
+
+$(foreach ver,1.8 1.9.1,$(eval $(call build_template,$(ver))))
